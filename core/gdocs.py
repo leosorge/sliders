@@ -185,7 +185,29 @@ def _fetch_web(url: str) -> tuple[str, str]:
             "trafilatura non installato. Aggiungi `trafilatura` a requirements.txt."
         )
 
-    resp = requests.get(url, headers=_HEADERS, timeout=30, allow_redirects=True)
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    session.mount("http://",  HTTPAdapter(max_retries=retry))
+
+    try:
+        resp = session.get(url, headers=_HEADERS, timeout=15, allow_redirects=True)
+    except requests.exceptions.ConnectTimeout:
+        raise TimeoutError(
+            f"Il sito non risponde (timeout): {url}\n"
+            "Verifica che l'URL sia raggiungibile dal browser."
+        )
+    except requests.exceptions.ConnectionError as e:
+        raise ConnectionError(f"Impossibile connettersi a {url}: {e}")
+
     if resp.status_code == 403:
         raise PermissionError(
             f"Accesso negato (403) a {url}. "
@@ -213,6 +235,21 @@ def _fetch_web(url: str) -> tuple[str, str]:
     return title.strip(), text.strip()
 
 
+# ── Prezzi Gemini (USD per 1M token, aggiornati aprile 2026) ─────────────────
+GEMINI_PRICING: dict[str, dict[str, float]] = {
+    "gemini-2.5-flash": {"input": 0.30,   "output": 2.50},
+    "gemini-2.0-flash": {"input": 0.10,   "output": 0.40},
+    "gemini-1.5-flash": {"input": 0.075,  "output": 0.30},
+}
+_FALLBACK_PRICE = {"input": 0.30, "output": 2.50}
+
+
+def tokens_to_usd(input_tokens: int, output_tokens: int, model: str) -> float:
+    """Calcola il costo in USD dato il conteggio token e il modello."""
+    price = GEMINI_PRICING.get(model, _FALLBACK_PRICE)
+    return (input_tokens * price["input"] + output_tokens * price["output"]) / 1_000_000
+
+
 # ── Gemini summary ────────────────────────────────────────────────────────────
 def generate_summary(
     text: str,
@@ -220,7 +257,10 @@ def generate_summary(
     api_key: str,
     model: str = "gemini-2.5-flash",
     max_chars: int = 60,
-) -> str:
+) -> tuple[str, int, int]:
+    """
+    Restituisce (summary, input_tokens, output_tokens).
+    """
     client = genai.Client(api_key=api_key)
     prompt = PROMPT_TEMPLATE.format(
         title=title,
@@ -236,7 +276,13 @@ def generate_summary(
         ),
     )
     raw = response.text.strip()
-    return wrap_summary(raw, max_chars)
+
+    # Leggi token usage dalla risposta (disponibile in google-genai >= 0.8)
+    usage = getattr(response, "usage_metadata", None)
+    in_tok  = getattr(usage, "prompt_token_count",     0) if usage else 0
+    out_tok = getattr(usage, "candidates_token_count", 0) if usage else 0
+
+    return wrap_summary(raw, max_chars), in_tok, out_tok
 
 
 # ── Punto di ingresso pubblico ────────────────────────────────────────────────
@@ -251,7 +297,10 @@ def process_url(
       - URL Google Docs  (docs.google.com/document/d/...)
       - URL web arbitrari (articoli, blog, qualsiasi pagina HTML)
 
-    Ritorna: {"title": str, "filename": str, "summary": str}
+    Ritorna: {
+        "title": str, "filename": str, "summary": str,
+        "input_tokens": int, "output_tokens": int, "cost_usd": float
+    }
     """
     if _is_gdocs(url):
         doc_id = _extract_doc_id(url)
@@ -262,6 +311,14 @@ def process_url(
     else:
         title, text = _fetch_web(url)
 
-    summary  = generate_summary(text, title, api_key, model, max_chars)
+    summary, in_tok, out_tok = generate_summary(text, title, api_key, model, max_chars)
+    cost_usd = tokens_to_usd(in_tok, out_tok, model)
     filename = sanitize_filename(title)
-    return {"title": title, "filename": filename, "summary": summary}
+    return {
+        "title":         title,
+        "filename":      filename,
+        "summary":       summary,
+        "input_tokens":  in_tok,
+        "output_tokens": out_tok,
+        "cost_usd":      cost_usd,
+    }
