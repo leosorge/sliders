@@ -1,4 +1,4 @@
-import zipfile
+iimport zipfile
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -238,28 +238,31 @@ with tab_viewer:
 
     if "outer_start" not in st.session_state:
         st.session_state.outer_start = 0
-    outer = st.session_state.outer_start
+    outer = st.session_state.outer_start % n_pdfs  # wrap sicuro
 
+    # Naviga di 1 in 1; wrap circolare; disabilitato se PDF <= VISIBLE
+    can_nav = n_pdfs > VISIBLE
     col_prev, col_ind, col_next = st.columns([1, 4, 1])
     with col_prev:
-        if st.button("◀", key="outer_prev", disabled=(outer == 0)):
-            st.session_state.outer_start = max(0, outer - VISIBLE)
+        if st.button("◀", key="outer_prev", disabled=not can_nav):
+            st.session_state.outer_start = (outer - 1) % n_pdfs
             st.rerun()
     with col_ind:
-        end_idx = min(outer + VISIBLE, n_pdfs)
+        shown = [(outer + i) % n_pdfs + 1 for i in range(min(VISIBLE, n_pdfs))]
+        shown_str = ", ".join(str(s) for s in shown)
         st.markdown(
             f"<div style='text-align:center;color:#a0a0c0;font-size:13px;padding-top:6px'>"
-            f"PDF {outer + 1}–{end_idx} / {n_pdfs}</div>",
+            f"PDF {shown_str} / {n_pdfs}</div>",
             unsafe_allow_html=True,
         )
     with col_next:
-        if st.button("▶", key="outer_next", disabled=(outer + VISIBLE >= n_pdfs)):
-            st.session_state.outer_start = min(n_pdfs - 1, outer + VISIBLE)
+        if st.button("▶", key="outer_next", disabled=not can_nav):
+            st.session_state.outer_start = (outer + 1) % n_pdfs
             st.rerun()
 
-    # ── Slot PDF visibili ─────────────────────────────────────────────────────
-    slots = [outer + i for i in range(VISIBLE) if outer + i < n_pdfs]
-    cols  = st.columns(len(slots)) if slots else []
+    # ── Slot PDF visibili — sempre VISIBLE colonne, wrap circolare ────────────
+    slots = [(outer + i) % n_pdfs for i in range(min(VISIBLE, n_pdfs))]
+    cols  = st.columns(VISIBLE)  # sempre 3 colonne per layout uniforme
 
     for col, idx in zip(cols, slots):
         entry = store[idx]
