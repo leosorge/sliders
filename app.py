@@ -37,6 +37,28 @@ with st.sidebar:
     )
     st.caption(f"Max caratteri/riga — A4: {MAX_CHARS_A4} | Quadrato: {MAX_CHARS_SQ}")
 
+    st.divider()
+    st.subheader("💶 Costo sessione")
+    eur_usd = st.number_input(
+        "Tasso EUR/USD", value=1.08, min_value=0.50, max_value=2.00, step=0.01,
+        help="Usato per convertire il costo Gemini in euro",
+    )
+    if "session_cost_usd" not in st.session_state:
+        st.session_state.session_cost_usd   = 0.0
+        st.session_state.session_in_tokens  = 0
+        st.session_state.session_out_tokens = 0
+    cost_eur = st.session_state.session_cost_usd / eur_usd
+    st.metric("Totale sessione", f"€ {cost_eur:.4f}")
+    st.caption(
+        f"🔡 {st.session_state.session_in_tokens:,} token in "
+        f"/ {st.session_state.session_out_tokens:,} out"
+    )
+    if st.button("🔄 Reset contatore", use_container_width=True):
+        st.session_state.session_cost_usd   = 0.0
+        st.session_state.session_in_tokens  = 0
+        st.session_state.session_out_tokens = 0
+        st.rerun()
+
 # ── Helper: passaggio Tab 1 → Tab 2 via session_state ────────────────────────
 def _push_to_viewer(name: str, pdf_bytes: bytes) -> None:
     """Aggiunge/aggiorna un PDF A4 nello store del Viewer."""
@@ -119,8 +141,19 @@ with tab_genera:
                         # ── Passa il PDF A4 direttamente al Viewer ────────
                         _push_to_viewer(f"{fname}_A4.pdf", pdf_a4)
 
-                        st.success(f"✅ {result['title']}")
+                        # ── Accumula costo sessione ────────────────────────
+                        st.session_state.session_cost_usd   += result.get("cost_usd", 0)
+                        st.session_state.session_in_tokens  += result.get("input_tokens", 0)
+                        st.session_state.session_out_tokens += result.get("output_tokens", 0)
+                        art_eur = result.get("cost_usd", 0) / eur_usd
+                        st.success(
+                            f"✅ {result['title']} "
+                            f"— {result.get('input_tokens',0):,}+{result.get('output_tokens',0):,} tok "
+                            f"(€ {art_eur:.5f})"
+                        )
 
+                    except (TimeoutError, ConnectionError, PermissionError) as e:
+                        st.warning(f"🌐 Rete — `{url[:70]}`: {e}")
                     except Exception as e:
                         st.error(f"❌ Errore su {url[:60]}: {e}")
 
@@ -149,8 +182,10 @@ with tab_genera:
 
             n_gen = len(st.session_state.get("pdf_store", []))
             if n_gen:
+                total_eur = st.session_state.session_cost_usd / eur_usd
                 st.info(
                     f"✅ {n_gen} PDF A4 pronti nel **Viewer** — "
+                    f"costo questa elaborazione: **€ {total_eur:.4f}** — "
                     "clicca la tab **📂 Viewer PDF A4** per visualizzarli."
                 )
 
