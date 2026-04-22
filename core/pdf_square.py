@@ -112,3 +112,4 @@ def generate_pdf_square(
 
     c.save()
     return buf.getvalue()
+
