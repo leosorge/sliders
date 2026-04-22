@@ -111,3 +111,4 @@ def generate_pdf_a4(
 
     c.save()
     return buf.getvalue()
+
