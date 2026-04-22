@@ -1,6 +1,7 @@
 import re
 import requests
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 PROMPT_TEMPLATE = """
 Sei un esperto di comunicazione e sintesi. Analizza il documento seguente e crea una sintesi strutturata in 5 punti chiave.
@@ -16,11 +17,9 @@ STRUTTURA:
 
 *[Prima parola/tema del titolo]*
 *[Seconda parte del titolo]*
-*[Eventuale terza riga del titolo]*
 =
 
-*Cinque punti*
-*chiave*
+*Cinque punti chiave*
 
 1. [Etichetta breve punto 1]
 2. [Etichetta breve punto 2]
@@ -31,10 +30,9 @@ STRUTTURA:
 
 *[Titolo Punto 1]*
 
-_[Prima riga di descrizione]_
+_[Prima riga]_
 _[Seconda riga]_
-*[keyword o concetto centrale]*
-_[eventuale terza riga]_
+*[keyword]*
 =
 
 *[Titolo Punto 2]*
@@ -47,32 +45,31 @@ _[Descrizione riga 2]_
 *[Titolo Punto 3]*
 
 _[Descrizione riga 1]_
-*[keyword]_
+*[keyword]*
 _[Descrizione riga 2]_
-_[Descrizione riga 3]_
 =
 
 *[Titolo Punto 4]*
 
 _[Descrizione riga 1]_
 _[Descrizione riga 2]_
-*[keyword/concetto]*
+*[keyword]*
 =
 
 *[Titolo Punto 5]*
 
 _[Descrizione riga 1]_
 _[Descrizione riga 2]_
-*[keyword/concetto]*
+*[keyword]*
 _[Descrizione riga 3]_
 
 === REGOLE ===
 - Scrivi TUTTO in italiano
 - Ogni sezione punto: 3-5 righe totali
-- Le parole più importanti DEVONO essere in *grassetto*
-- Le descrizioni narrative in _corsivo_
-- NON aggiungere testo extra fuori dal formato
-- Il titolo (prima sezione) deve riflettere il tema centrale del documento
+- Le parole più importanti in *grassetto*, descrizioni in _corsivo_
+- NON aggiungere testo fuori dal formato
+- CRITICO: ogni riga DEVE essere al massimo {max_chars} caratteri inclusi spazi e marcatori.
+  Se una frase e' piu' lunga, spezzala su due righe consecutive prima di raggiungere il limite.
 
 === DOCUMENTO DA ANALIZZARE ===
 Titolo: {title}
@@ -94,7 +91,7 @@ def fetch_document_text(doc_id: str) -> str:
     if resp.status_code == 403:
         raise PermissionError(
             "Accesso negato (403). Verifica che il documento sia condiviso "
-            "con 'Chiunque abbia il link può visualizzare'."
+            "con 'Chiunque abbia il link puo visualizzare'."
         )
     resp.raise_for_status()
     return resp.text
@@ -106,7 +103,7 @@ def fetch_document_title(doc_id: str) -> str:
             f"https://docs.google.com/document/d/{doc_id}/pub", timeout=15
         )
         match = re.search(
-            r'<title>([^<]+?)(?:\s*[–\-]\s*Google [^<]*)?</title>',
+            r'<title>([^<]+?)(?:\s*[-]\s*Google [^<]*)?</title>',
             resp.text,
             re.IGNORECASE,
         )
@@ -121,24 +118,82 @@ def sanitize_filename(name: str) -> str:
     return re.sub(r'[\\/*?:"<>|\n\r\t]', "", name).strip()
 
 
-def generate_summary(text: str, title: str, api_key: str, model: str = "gemini-2.5-flash") -> str:
-    genai.configure(api_key=api_key)
-    gemini_model = genai.GenerativeModel(model)
-    prompt = PROMPT_TEMPLATE.format(title=title, text=text[:50000])
-    response = gemini_model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(temperature=0.3, max_output_tokens=2048),
+def _wrap_line(line: str, max_chars: int) -> list[str]:
+    """Splits a line exceeding max_chars at word boundaries, preserving leading markers."""
+    if len(line) <= max_chars:
+        return [line]
+
+    # Detect leading marker (* or _) to reapply on continuation lines
+    marker_open = ""
+    marker_close = ""
+    inner = line
+    if line.startswith("*") and line.endswith("*") and len(line) > 2:
+        marker_open, marker_close, inner = "*", "*", line[1:-1]
+    elif line.startswith("_") and line.endswith("_") and len(line) > 2:
+        marker_open, marker_close, inner = "_", "_", line[1:-1]
+
+    words = inner.split(" ")
+    result = []
+    current = ""
+    for word in words:
+        candidate = (current + " " + word).strip()
+        full = f"{marker_open}{candidate}{marker_close}"
+        if len(full) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                result.append(f"{marker_open}{current}{marker_close}")
+            current = word
+    if current:
+        result.append(f"{marker_open}{current}{marker_close}")
+    return result if result else [line]
+
+
+def wrap_summary(text: str, max_chars: int) -> str:
+    """Post-processes summary to enforce max_chars per line."""
+    out = []
+    for line in text.splitlines():
+        out.extend(_wrap_line(line, max_chars))
+    return "\n".join(out)
+
+
+def generate_summary(
+    text: str,
+    title: str,
+    api_key: str,
+    model: str = "gemini-2.5-flash",
+    max_chars: int = 60,
+) -> str:
+    client = genai.Client(api_key=api_key)
+    prompt = PROMPT_TEMPLATE.format(
+        title=title,
+        text=text[:50000],
+        max_chars=max_chars,
     )
-    return response.text.strip()
+    response = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.3,
+            max_output_tokens=2048,
+        ),
+    )
+    raw = response.text.strip()
+    # Enforce client-side wrap as safety net
+    return wrap_summary(raw, max_chars)
 
 
-def process_url(url: str, api_key: str, model: str = "gemini-2.5-flash") -> dict:
-    """Fetches a Google Doc URL and returns a dict with title and summary text."""
+def process_url(
+    url: str,
+    api_key: str,
+    model: str = "gemini-2.5-flash",
+    max_chars: int = 60,
+) -> dict:
     doc_id = extract_doc_id(url)
     text = fetch_document_text(doc_id)
     if len(text) < 50:
         raise ValueError("Documento vuoto o non accessibile.")
     title = fetch_document_title(doc_id)
-    summary = generate_summary(text, title, api_key, model)
+    summary = generate_summary(text, title, api_key, model, max_chars)
     filename = sanitize_filename(title)
     return {"title": title, "filename": filename, "summary": summary}
