@@ -1,63 +1,69 @@
+"""
+core/gdocs.py
+─────────────
+Recupera testo e titolo da due sorgenti:
+
+  • Google Docs  — export diretto in .txt via API pubblica
+  • URL web      — estrazione testo con trafilatura (filtra nav/footer/ads)
+
+Punto di ingresso unico: process_url()
+"""
+
+from __future__ import annotations
+
 import re
+
 import requests
+
+# ── Gemini ────────────────────────────────────────────────────────────────────
 from google import genai
 from google.genai import types
 
+# ── Prompt ────────────────────────────────────────────────────────────────────
 PROMPT_TEMPLATE = """
 Sei un esperto di comunicazione e sintesi. Analizza il documento seguente e crea una sintesi strutturata in 5 punti chiave.
 
 === FORMATO DI OUTPUT (seguilo ESATTAMENTE) ===
 
 Usa questi marcatori:
-- *testo*   → grassetto (titoli, keyword importanti)
-- _testo_   → corsivo  (descrizioni, spiegazioni)
-- =         → separatore di sezione (da solo su una riga)
+
+- *testo* → grassetto (titoli, keyword importanti)
+- _testo_ → corsivo (descrizioni, spiegazioni)
+- = → separatore di sezione (da solo su una riga)
 
 STRUTTURA:
 
 *[Prima parola/tema del titolo]*
 *[Seconda parte del titolo]*
 =
-
 *Cinque punti chiave*
-
 1. [Etichetta breve punto 1]
 2. [Etichetta breve punto 2]
 3. [Etichetta breve punto 3]
 4. [Etichetta breve punto 4]
 5. [Etichetta breve punto 5]
 =
-
 *[Titolo Punto 1]*
-
 _[Prima riga]_
 _[Seconda riga]_
 *[keyword]*
 =
-
 *[Titolo Punto 2]*
-
 _[Descrizione riga 1]_
 _[Descrizione riga 2]_
 *[concetto chiave]*
 =
-
 *[Titolo Punto 3]*
-
 _[Descrizione riga 1]_
 *[keyword]*
 _[Descrizione riga 2]_
 =
-
 *[Titolo Punto 4]*
-
 _[Descrizione riga 1]_
 _[Descrizione riga 2]_
 *[keyword]*
 =
-
 *[Titolo Punto 5]*
-
 _[Descrizione riga 1]_
 _[Descrizione riga 2]_
 *[keyword]*
@@ -69,7 +75,7 @@ _[Descrizione riga 3]_
 - Le parole più importanti in *grassetto*, descrizioni in _corsivo_
 - NON aggiungere testo fuori dal formato
 - CRITICO: ogni riga DEVE essere al massimo {max_chars} caratteri inclusi spazi e marcatori.
-  Se una frase e' piu' lunga, spezzala su due righe consecutive prima di raggiungere il limite.
+  Se una frase è più lunga, spezzala su due righe consecutive prima di raggiungere il limite.
 
 === DOCUMENTO DA ANALIZZARE ===
 Titolo: {title}
@@ -78,63 +84,22 @@ Titolo: {title}
 """
 
 
-def extract_doc_id(url: str) -> str:
-    match = re.search(r'/document/d/([a-zA-Z0-9_-]+)', url)
-    if not match:
-        raise ValueError(f"URL non valido: {url!r}")
-    return match.group(1)
-
-
-def fetch_document_text(doc_id: str) -> str:
-    url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
-    resp = requests.get(url, allow_redirects=True, timeout=30)
-    if resp.status_code == 403:
-        raise PermissionError(
-            "Accesso negato (403). Verifica che il documento sia condiviso "
-            "con 'Chiunque abbia il link puo visualizzare'."
-        )
-    resp.raise_for_status()
-    return resp.text
-
-
-def fetch_document_title(doc_id: str) -> str:
-    try:
-        resp = requests.get(
-            f"https://docs.google.com/document/d/{doc_id}/pub", timeout=15
-        )
-        match = re.search(
-            r'<title>([^<]+?)(?:\s*[-]\s*Google [^<]*)?</title>',
-            resp.text,
-            re.IGNORECASE,
-        )
-        if match:
-            return match.group(1).strip()
-    except Exception:
-        pass
-    return doc_id
-
-
+# ── Helpers comuni ────────────────────────────────────────────────────────────
 def sanitize_filename(name: str) -> str:
-    return re.sub(r'[\\/*?:"<>|\n\r\t]', "", name).strip()
+    return re.sub(r'[\\/\*?:"<>|\n\r\t]', "", name).strip()
 
 
 def _wrap_line(line: str, max_chars: int) -> list[str]:
-    """Splits a line exceeding max_chars at word boundaries, preserving leading markers."""
     if len(line) <= max_chars:
         return [line]
-
-    # Detect leading marker (* or _) to reapply on continuation lines
-    marker_open = ""
-    marker_close = ""
+    marker_open = marker_close = ""
     inner = line
     if line.startswith("*") and line.endswith("*") and len(line) > 2:
         marker_open, marker_close, inner = "*", "*", line[1:-1]
     elif line.startswith("_") and line.endswith("_") and len(line) > 2:
         marker_open, marker_close, inner = "_", "_", line[1:-1]
-
     words = inner.split(" ")
-    result = []
-    current = ""
+    result, current = [], ""
     for word in words:
         candidate = (current + " " + word).strip()
         full = f"{marker_open}{candidate}{marker_close}"
@@ -146,17 +111,109 @@ def _wrap_line(line: str, max_chars: int) -> list[str]:
             current = word
     if current:
         result.append(f"{marker_open}{current}{marker_close}")
-    return result if result else [line]
+    return result or [line]
 
 
 def wrap_summary(text: str, max_chars: int) -> str:
-    """Post-processes summary to enforce max_chars per line."""
     out = []
     for line in text.splitlines():
         out.extend(_wrap_line(line, max_chars))
     return "\n".join(out)
 
 
+# ── Google Docs ───────────────────────────────────────────────────────────────
+def _is_gdocs(url: str) -> bool:
+    return "docs.google.com/document/d/" in url
+
+
+def _extract_doc_id(url: str) -> str:
+    match = re.search(r"/document/d/([a-zA-Z0-9_-]+)", url)
+    if not match:
+        raise ValueError(f"URL Google Docs non valido: {url!r}")
+    return match.group(1)
+
+
+def _fetch_gdocs_text(doc_id: str) -> str:
+    url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
+    resp = requests.get(url, allow_redirects=True, timeout=30)
+    if resp.status_code == 403:
+        raise PermissionError(
+            "Accesso negato (403). Verifica che il documento sia condiviso "
+            "con 'Chiunque abbia il link può visualizzare'."
+        )
+    resp.raise_for_status()
+    return resp.text
+
+
+def _fetch_gdocs_title(doc_id: str) -> str:
+    try:
+        resp = requests.get(
+            f"https://docs.google.com/document/d/{doc_id}/pub", timeout=15
+        )
+        match = re.search(
+            r"<title>([^<]+?)(?:\s*[-]\s*Google [^<]*)?\s*</title>",
+            resp.text,
+            re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip()
+    except Exception:
+        pass
+    return doc_id
+
+
+# ── URL web arbitrari ─────────────────────────────────────────────────────────
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+}
+
+
+def _fetch_web(url: str) -> tuple[str, str]:
+    """
+    Restituisce (title, text) da un URL web generico.
+    Scarica con requests (User-Agent browser) + estrae con trafilatura.
+    """
+    try:
+        import trafilatura
+    except ImportError:
+        raise ImportError(
+            "trafilatura non installato. Aggiungi `trafilatura` a requirements.txt."
+        )
+
+    resp = requests.get(url, headers=_HEADERS, timeout=30, allow_redirects=True)
+    if resp.status_code == 403:
+        raise PermissionError(
+            f"Accesso negato (403) a {url}. "
+            "Il sito potrebbe richiedere login o bloccare i bot."
+        )
+    resp.raise_for_status()
+    html = resp.text
+
+    text = trafilatura.extract(
+        html,
+        url=url,
+        include_comments=False,
+        include_tables=True,
+        favor_recall=True,
+    )
+    if not text or len(text.strip()) < 50:
+        raise ValueError(
+            f"Testo non estraibile da: {url}\n"
+            "Il sito potrebbe essere dietro paywall o usare JS dinamico."
+        )
+
+    meta = trafilatura.extract_metadata(html, default_url=url)
+    title = (meta.title if meta and meta.title else "") or url
+
+    return title.strip(), text.strip()
+
+
+# ── Gemini summary ────────────────────────────────────────────────────────────
 def generate_summary(
     text: str,
     title: str,
@@ -179,21 +236,32 @@ def generate_summary(
         ),
     )
     raw = response.text.strip()
-    # Enforce client-side wrap as safety net
     return wrap_summary(raw, max_chars)
 
 
+# ── Punto di ingresso pubblico ────────────────────────────────────────────────
 def process_url(
     url: str,
     api_key: str,
     model: str = "gemini-2.5-flash",
     max_chars: int = 60,
 ) -> dict:
-    doc_id = extract_doc_id(url)
-    text = fetch_document_text(doc_id)
-    if len(text) < 50:
-        raise ValueError("Documento vuoto o non accessibile.")
-    title = fetch_document_title(doc_id)
-    summary = generate_summary(text, title, api_key, model, max_chars)
+    """
+    Accetta indifferentemente:
+      - URL Google Docs  (docs.google.com/document/d/...)
+      - URL web arbitrari (articoli, blog, qualsiasi pagina HTML)
+
+    Ritorna: {"title": str, "filename": str, "summary": str}
+    """
+    if _is_gdocs(url):
+        doc_id = _extract_doc_id(url)
+        text   = _fetch_gdocs_text(doc_id)
+        if len(text.strip()) < 50:
+            raise ValueError("Documento Google Docs vuoto o non accessibile.")
+        title  = _fetch_gdocs_title(doc_id)
+    else:
+        title, text = _fetch_web(url)
+
+    summary  = generate_summary(text, title, api_key, model, max_chars)
     filename = sanitize_filename(title)
     return {"title": title, "filename": filename, "summary": summary}
