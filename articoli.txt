@@ -1,3 +1,8 @@
-# Un URL Google Docs per riga (i link devono essere condivisi "chiunque abbia il link")
-# Esempio:
-# https://docs.google.com/document/d/1q-0aeFiGhmKnYNyENnZDinRChUFq0EnNbUrBMfm1jGg/edit?usp=drive_link
+.env
+.streamlit/secrets.toml
+output/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.zip
