@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FT-CS Slider</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<style>
+:root {
+  --navy:    #07112e;
+  --mid:     #0d1f4a;
+  --blue:    #1557c0;
+  --cyan:    #00c6e0;
+  --white:   #ffffff;
+  --g100:    #e8edf8;
+  --g400:    #8a99bb;
+  --text:    #1a2340;
+  --font:    'Kanit', sans-serif;
+  --nav-h:   60px;
+  --r:       10px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  font-weight: 300;
+  background: var(--navy);
+  color: var(--white);
+  min-height: 100vh;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--nav-h);
+  background: rgba(7,17,46,.97);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 5vw; z-index: 100;
+}
+.nav-logo {
+  font-weight: 700; font-size: 20px; letter-spacing: .04em;
+  color: var(--white); text-decoration: none;
+  display: flex; align-items: center; gap: 8px;
+}
+.nav-logo span { color: var(--cyan); }
+.nav-dot {
+  width: 7px; height: 7px; background: var(--cyan);
+  border-radius: 50%; animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.4;transform:scale(.6);} }
+.nav-link {
+  font-weight: 600; font-size: 13px; letter-spacing: .08em;
+  text-transform: uppercase; color: rgba(255,255,255,.55);
+  text-decoration: none; padding: 6px 14px; border-radius: 6px;
+  transition: color .2s, background .2s;
+}
+.nav-link:hover { color: var(--white); background: rgba(255,255,255,.07); }
+.nav-link.cta { color: var(--navy); background: var(--cyan); }
+.nav-link.cta:hover { background: #00defa; }
+
+/* ── LAYOUT ── */
+main {
+  padding-top: var(--nav-h);
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  min-height: 100vh;
+}
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; }
+}
+
+/* ── LEFT PANEL ── */
+.panel {
+  background: var(--mid);
+  border-right: 1px solid rgba(255,255,255,.06);
+  display: flex; flex-direction: column;
+  padding: 32px 24px;
+  gap: 20px;
+  overflow-y: auto;
+  max-height: calc(100vh - var(--nav-h));
+  position: sticky; top: var(--nav-h);
+}
+@media (max-width: 900px) {
+  .panel { position: static; max-height: none; border-right: none; border-bottom: 1px solid rgba(255,255,255,.06); }
+}
+
+.panel-title {
+  font-weight: 700; font-size: 11px; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--cyan);
+  display: flex; align-items: center; gap: 8px;
+}
+.panel-title::before {
+  content: ''; display: block; width: 24px; height: 2px;
+  background: var(--cyan); border-radius: 1px;
+}
+
+.panel h2 {
+  font-weight: 700; font-size: 22px; letter-spacing: .02em;
+  color: var(--white); line-height: 1.2;
+}
+.panel h2 em { font-style: normal; color: var(--cyan); }
+
+.panel p {
+  font-weight: 300; font-size: 13px; line-height: 1.7;
+  color: rgba(255,255,255,.5);
+}
+
+/* ── LINK LIST ── */
+.link-list {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.link-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.link-row input {
+  flex: 1;
+  font-family: var(--font); font-weight: 300; font-size: 12px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px;
+  color: rgba(255,255,255,.8);
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color .2s, background .2s;
+}
+.link-row input:focus {
+  border-color: var(--cyan);
+  background: rgba(0,198,224,.06);
+}
+.link-row input::placeholder { color: rgba(255,255,255,.25); }
+.btn-remove {
+  flex-shrink: 0; width: 28px; height: 28px;
+  background: none; border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px; color: rgba(255,255,255,.3);
+  cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+}
+.btn-remove:hover { border-color: #e94560; color: #e94560; background: rgba(233,69,96,.08); }
+
+.btn-add {
+  font-family: var(--font); font-weight: 600; font-size: 12px;
+  letter-spacing: .06em; text-transform: uppercase;
+  background: none; border: 1px dashed rgba(255,255,255,.2);
+  border-radius: 6px; color: rgba(255,255,255,.4);
+  padding: 8px; cursor: pointer; width: 100%;
+  transition: all .2s;
+}
+.btn-add:hover { border-color: var(--cyan); color: var(--cyan); background: rgba(0,198,224,.05); }
+
+/* ── GENERATE BUTTON ── */
+.btn-gen {
+  font-family: var(--font); font-weight: 700; font-size: 14px;
+  letter-spacing: .06em; text-transform: uppercase;
+  background: var(--cyan); color: var(--navy);
+  border: none; border-radius: 8px;
+  padding: 14px; width: 100%;
+  cursor: pointer; transition: background .2s, transform .15s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-gen:hover { background: #00defa; transform: translateY(-1px); }
+.btn-gen:active { transform: translateY(0); }
+.btn-gen:disabled { background: rgba(0,198,224,.3); color: rgba(7,17,46,.5); cursor: not-allowed; transform: none; }
+
+/* ── STATUS ── */
+.status-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 180px; overflow-y: auto;
+}
+.status-item {
+  font-size: 12px; line-height: 1.4;
+  padding: 7px 10px; border-radius: 6px;
+  display: flex; align-items: flex-start; gap: 8px;
+  animation: fadeIn .25s ease;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+.status-item.ok  { background: rgba(0,184,122,.12); color: #00b87a; }
+.status-item.err { background: rgba(233,69,96,.12);  color: #e94560; }
+.status-item.inf { background: rgba(0,198,224,.10);  color: var(--cyan); }
+.status-item i   { flex-shrink: 0; margin-top: 1px; }
+
+/* ── PROGRESS ── */
+.progress-wrap { display: none; flex-direction: column; gap: 6px; }
+.progress-wrap.show { display: flex; }
+.progress-bar-bg {
+  background: rgba(255,255,255,.06); border-radius: 4px; height: 6px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--blue), var(--cyan));
+  border-radius: 4px; width: 0%; transition: width .3s;
+}
+.progress-label { font-size: 11px; color: rgba(255,255,255,.4); letter-spacing: .05em; }
+
+/* ── DIVIDER ── */
+.divider {
+  border: none; border-top: 1px solid rgba(255,255,255,.06); margin: 4px 0;
+}
+
+/* ── RIGHT: SLIDER ── */
+.slider-wrap {
+  display: flex; flex-direction: column;
+  background: #070f2a;
+}
+.slider-header {
+  padding: 20px 28px 0;
+  display: flex; align-items: center; gap: 10px;
+}
+.slider-header h3 {
+  font-weight: 700; font-size: 14px; letter-spacing: .1em;
+  text-transform: uppercase; color: rgba(255,255,255,.35);
+}
+.slider-header a {
+  font-size: 12px; color: var(--cyan); text-decoration: none;
+  margin-left: auto; letter-spacing: .04em;
+}
+.slider-header a:hover { text-decoration: underline; }
+
+.iframe-outer {
+  position: relative; flex: 1;
+  min-height: calc(100vh - var(--nav-h) - 52px);
+}
+.iframe-outer iframe {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: none;
+}
+.iframe-loader {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: #070f2a; gap: 14px; z-index: 2;
+  transition: opacity .5s;
+}
+.iframe-loader.gone { opacity: 0; pointer-events: none; }
+.loader-logo { font-weight: 700; font-size: 26px; letter-spacing: .04em; color: var(--white); }
+.loader-logo span { color: var(--cyan); }
+.loader-bar { width: 80px; height: 2px; background: #1a2a50; border-radius: 1px; overflow: hidden; }
+.loader-bar::after {
+  content: ''; display: block; height: 100%; width: 35%;
+  background: var(--cyan); animation: lslide 1.2s ease-in-out infinite;
+}
+@keyframes lslide { 0%{transform:translateX(-100%);} 100%{transform:translateX(380%);} }
+.loader-text { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: #2a4070; }
+
+/* ── DOWNLOAD AREA ── */
+.dl-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;
+}
+.btn-dl {
+  font-family: var(--font); font-weight: 600; font-size: 12px;
+  letter-spacing: .05em; text-transform: uppercase;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px; color: rgba(255,255,255,.7);
+  padding: 10px 8px; cursor: pointer; text-align: center; text-decoration: none;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: all .2s;
+}
+.btn-dl:hover { background: rgba(0,198,224,.12); border-color: var(--cyan); color: var(--cyan); }
+.btn-dl.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="nav-logo"><span class="nav-dot"></span>FT-<span>CS</span></a>
+  <div style="display:flex;gap:4px;">
+    <a href="https://sliders-lkhfwxgjn8xfrbxfj9rznx.streamlit.app" target="_blank" class="nav-link">App completa ↗</a>
+    <a href="UniCenter.html" class="nav-link cta">UniCenter</a>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ── LEFT PANEL ── -->
+  <aside class="panel">
+
+    <div>
+      <div class="panel-title">FT-CS Daily</div>
+      <h2 style="margin-top:10px;">Genera <em>PDF</em><br>da lista txt</h2>
+    </div>
+
+    <p>Incolla o modifica i link ai file <code style="color:var(--cyan);background:rgba(0,198,224,.1);padding:1px 5px;border-radius:3px;">.txt</code> già formattati su Google Drive. Clicca <strong style="color:var(--white);">Genera PDF</strong> per scaricarli e creare gli slider.</p>
+
+    <div class="link-list" id="linkList"></div>
+
+    <button class="btn-add" onclick="addLink('')">
+      <i class="fas fa-plus"></i> Aggiungi link
+    </button>
+
+    <hr class="divider">
+
+    <!-- progress -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label" id="progressLabel">Elaborazione…</div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    </div>
+
+    <!-- status -->
+    <div class="status-list" id="statusList"></div>
+
+    <!-- download -->
+    <div class="dl-row" id="dlRow" style="display:none;">
+      <a id="dlA4"  class="btn-dl hidden" download="slider_A4.zip">
+        <i class="fas fa-file-pdf"></i> ZIP A4
+      </a>
+      <a id="dlSq"  class="btn-dl hidden" download="slider_quadrati.zip">
+        <i class="fas fa-file-pdf"></i> ZIP Quadrati
+      </a>
+    </div>
+
+    <button class="btn-gen" id="btnGen" onclick="generate()">
+      <i class="fas fa-bolt"></i> Genera PDF
+    </button>
+
+    <p style="font-size:11px;color:rgba(255,255,255,.2);text-align:center;margin-top:-8px;">
+      I file devono essere condivisi con "Chiunque abbia il link"
+    </p>
+
+  </aside>
+
+  <!-- ── RIGHT: SLIDER ── -->
+  <div class="slider-wrap">
+    <div class="slider-header">
+      <h3>News Slider</h3>
+      <a href="https://sliders-lkhfwxgjn8xfrbxfj9rznx.streamlit.app" target="_blank">
+        Apri app completa ↗
+      </a>
+    </div>
+    <div class="iframe-outer">
+      <div class="iframe-loader" id="ifrLoader">
+        <div class="loader-logo">FT-<span>CS</span></div>
+        <div class="loader-bar"></div>
+        <div class="loader-text">Caricamento slider…</div>
+      </div>
+      <iframe
+        id="sliderFrame"
+        src="https://sliders-lkhfwxgjn8xfrbxfj9rznx.streamlit.app/?embed=true"
+        title="FT-CS News Slider"
+        allow="clipboard-read; clipboard-write"
+        referrerpolicy="no-referrer-when-downgrade"
+        loading="lazy"
+      ></iframe>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Default links ────────────────────────────────────────────────────────────
+const DEFAULT_LINKS = [
+  "https://drive.google.com/file/d/16suMFynwqTSml2pWdNLa-gWfk5Bsl118/view?usp=drive_link",
+  "https://drive.google.com/file/d/1anbO6rA8GQ5kiHBKfI1Wy_dIpTr4aOMK/view?usp=drive_link",
+  "https://drive.google.com/file/d/1fJ8FzJHi-b8ZmJJTKsLWHK5Did4CvI2c/view?usp=drive_link",
+  "https://drive.google.com/file/d/1Cs_Kmkfa0VAEu0PdUFQ2hbQgFb_RMIbC/view?usp=drive_link",
+];
+
+DEFAULT_LINKS.forEach(u => addLink(u));
+
+// ── Link management ──────────────────────────────────────────────────────────
+function addLink(url) {
+  const list = document.getElementById('linkList');
+  const row  = document.createElement('div');
+  row.className = 'link-row';
+
+  const input = document.createElement('input');
+  input.type        = 'text';
+  input.value       = url;
+  input.placeholder = 'https://drive.google.com/file/d/…';
+
+  const btn = document.createElement('button');
+  btn.className = 'btn-remove';
+  btn.innerHTML = '<i class="fas fa-times"></i>';
+  btn.onclick   = () => row.remove();
+
+  row.appendChild(input);
+  row.appendChild(btn);
+  list.appendChild(row);
+  if (!url) input.focus();
+}
+
+function getLinks() {
+  return [...document.querySelectorAll('#linkList input')]
+    .map(i => i.value.trim())
+    .filter(Boolean);
+}
+
+// ── Google Drive URL → direct download ──────────────────────────────────────
+function gdriveDirectUrl(url) {
+  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+  return url;
+}
+
+function filenameFromUrl(url) {
+  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1].slice(0, 14) : url.split('/').pop().replace('.txt','') || 'articolo';
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+function addStatus(msg, type = 'inf') {
+  const icons = { ok: 'fa-check-circle', err: 'fa-times-circle', inf: 'fa-circle-notch fa-spin' };
+  const el = document.createElement('div');
+  el.className = `status-item ${type}`;
+  el.innerHTML = `<i class="fas ${icons[type]}"></i><span>${msg}</span>`;
+  const list = document.getElementById('statusList');
+  list.appendChild(el);
+  list.scrollTop = list.scrollHeight;
+  return el;
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progressFill').style.width  = pct + '%';
+  document.getElementById('progressLabel').textContent = label;
+}
+
+// ── Fetch a txt file ─────────────────────────────────────────────────────────
+async function fetchTxt(url) {
+  const direct = gdriveDirectUrl(url);
+  const res = await fetch(direct, { redirect: 'follow' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const buf = await res.arrayBuffer();
+  // Try UTF-8, fallback latin-1
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder('latin-1').decode(buf);
+  }
+}
+
+// ── JSZip CDN ────────────────────────────────────────────────────────────────
+function loadJSZip() {
+  return new Promise((res, rej) => {
+    if (window.JSZip) return res();
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+// ── Simple PDF builder (replicates the txt→PDF format via jsPDF) ─────────────
+function loadJsPDF() {
+  return new Promise((res, rej) => {
+    if (window.jspdf) return res();
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+// ── Render one .txt → PDF bytes (A4 210×297mm) ───────────────────────────────
+function txtToPdfBytes(text, pubTitle, dateStr, footerText, format) {
+  const { jsPDF } = window.jspdf;
+  const isA4 = format === 'a4';
+  const W = isA4 ? 210 : 297;  // mm
+  const H = isA4 ? 297 : 297;
+  const pdf = new jsPDF({ orientation: isA4 ? 'portrait' : 'portrait', unit: 'mm', format: isA4 ? 'a4' : [297,297] });
+
+  const ML = 18, MR = 18, MT = 16;
+  const usableW = W - ML - MR;
+  let y = MT;
+
+  // ── Header bar ──
+  pdf.setFillColor(10, 20, 78);
+  pdf.rect(0, 0, W, 12, 'F');
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8);
+  pdf.setTextColor(200, 220, 255);
+  pdf.text(pubTitle, ML, 8);
+  pdf.text(dateStr, W - MR, 8, { align: 'right' });
+  y = 18;
+
+  // ── Parse lines ──
+  const lines = text.split('\n');
+  let sectionCount = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const trimmed = raw.trim();
+
+    if (trimmed === '=') {
+      // Section divider
+      sectionCount++;
+      if (sectionCount === 1) {
+        // After title block — draw thin rule
+        pdf.setDrawColor(30, 80, 180);
+        pdf.setLineWidth(0.3);
+        pdf.line(ML, y, W - MR, y);
+        y += 5;
+      } else {
+        pdf.setDrawColor(200, 210, 230);
+        pdf.setLineWidth(0.2);
+        pdf.line(ML, y, W - MR, y);
+        y += 4;
+      }
+      continue;
+    }
+
+    // Bold: *text*
+    if (/^\*[^*]+\*$/.test(trimmed)) {
+      const content = trimmed.slice(1, -1);
+      const isTitle = sectionCount === 0;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(isTitle ? (isA4 ? 18 : 26) : (isA4 ? 11 : 15));
+      pdf.setTextColor(isTitle ? 200 : 10, isTitle ? 220 : 20, isTitle ? 255 : 78);
+      const wrapped = pdf.splitTextToSize(content, usableW);
+      wrapped.forEach(line => {
+        if (y > H - 16) { pdf.addPage(); y = MT; }
+        pdf.text(line, ML, y);
+        y += isTitle ? (isA4 ? 9 : 13) : (isA4 ? 6 : 8);
+      });
+      continue;
+    }
+
+    // Italic: _text_
+    if (/^_[^_]+_$/.test(trimmed)) {
+      const content = trimmed.slice(1, -1);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(isA4 ? 9.5 : 13);
+      pdf.setTextColor(80, 90, 120);
+      const wrapped = pdf.splitTextToSize(content, usableW);
+      wrapped.forEach(line => {
+        if (y > H - 16) { pdf.addPage(); y = MT; }
+        pdf.text(line, ML, y);
+        y += isA4 ? 5.5 : 7.5;
+      });
+      continue;
+    }
+
+    // Numbered list
+    if (/^\d+\./.test(trimmed)) {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(isA4 ? 9 : 13);
+      pdf.setTextColor(50, 60, 100);
+      const wrapped = pdf.splitTextToSize(trimmed, usableW - 4);
+      wrapped.forEach((line, li) => {
+        if (y > H - 16) { pdf.addPage(); y = MT; }
+        pdf.text(line, ML + (li > 0 ? 4 : 0), y);
+        y += isA4 ? 5 : 7;
+      });
+      continue;
+    }
+
+    // Normal text
+    if (trimmed) {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(isA4 ? 9 : 13);
+      pdf.setTextColor(50, 60, 100);
+      const wrapped = pdf.splitTextToSize(trimmed, usableW);
+      wrapped.forEach(line => {
+        if (y > H - 16) { pdf.addPage(); y = MT; }
+        pdf.text(line, ML, y);
+        y += isA4 ? 5 : 7;
+      });
+    }
+  }
+
+  // ── Footer ──
+  const totalPages = pdf.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    pdf.setPage(p);
+    pdf.setFillColor(10, 20, 78);
+    pdf.rect(0, H - 10, W, 10, 'F');
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    pdf.setTextColor(150, 170, 210);
+    pdf.text(footerText, ML, H - 4);
+    pdf.text(`${p}/${totalPages}`, W - MR, H - 4, { align: 'right' });
+  }
+
+  return pdf.output('arraybuffer');
+}
+
+// ── MAIN GENERATE ────────────────────────────────────────────────────────────
+async function generate() {
+  const links = getLinks().filter(Boolean);
+  if (!links.length) { addStatus('Nessun link inserito.', 'err'); return; }
+
+  const btn = document.getElementById('btnGen');
+  btn.disabled = true;
+  document.getElementById('statusList').innerHTML  = '';
+  document.getElementById('dlRow').style.display   = 'none';
+  document.getElementById('progressWrap').classList.add('show');
+  setProgress(0, 'Caricamento librerie…');
+
+  try {
+    await Promise.all([loadJsPDF(), loadJSZip()]);
+  } catch(e) {
+    addStatus('Errore caricamento librerie PDF.', 'err');
+    btn.disabled = false; return;
+  }
+
+  const pubTitle   = 'FT-CS Daily';
+  const dateStr    = new Date().toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'2-digit'});
+  const footerText = 'Leo Sorge @ CEO Source 2026';
+
+  const zipA4 = new JSZip();
+  const zipSq = new JSZip();
+  let ok = 0;
+
+  for (let i = 0; i < links.length; i++) {
+    const url  = links[i];
+    const pct  = Math.round((i / links.length) * 90);
+    const name = filenameFromUrl(url);
+    setProgress(pct, `${i+1}/${links.length}: ${name}…`);
+
+    const si = addStatus(`Scaricamento ${name}…`, 'inf');
+    try {
+      const text = await fetchTxt(url);
+      si.querySelector('span').textContent = `Generazione PDF ${name}…`;
+
+      const pdfA4 = txtToPdfBytes(text, pubTitle, dateStr, footerText, 'a4');
+      const pdfSq = txtToPdfBytes(text, pubTitle, dateStr, footerText, 'sq');
+
+      zipA4.file(`${name}_A4.pdf`, pdfA4);
+      zipSq.file(`${name}_sq.pdf`, pdfSq);
+
+      si.className = 'status-item ok';
+      si.querySelector('i').className = 'fas fa-check-circle';
+      si.querySelector('span').textContent = `✓ ${name}`;
+      ok++;
+    } catch(e) {
+      si.className = 'status-item err';
+      si.querySelector('i').className = 'fas fa-times-circle';
+      si.querySelector('span').textContent = `${name}: ${e.message}`;
+    }
+  }
+
+  if (ok > 0) {
+    setProgress(95, 'Creazione ZIP…');
+    const [blobA4, blobSq] = await Promise.all([
+      zipA4.generateAsync({ type:'blob' }),
+      zipSq.generateAsync({ type:'blob' }),
+    ]);
+
+    const dlA4 = document.getElementById('dlA4');
+    const dlSq = document.getElementById('dlSq');
+    dlA4.href = URL.createObjectURL(blobA4);
+    dlSq.href = URL.createObjectURL(blobSq);
+    dlA4.classList.remove('hidden');
+    dlSq.classList.remove('hidden');
+    document.getElementById('dlRow').style.display = 'grid';
+
+    addStatus(`${ok} PDF pronti — scarica i ZIP sopra.`, 'ok');
+  }
+
+  setProgress(100, 'Completato!');
+  setTimeout(() => document.getElementById('progressWrap').classList.remove('show'), 2000);
+  btn.disabled = false;
+}
+
+// ── Iframe loader ─────────────────────────────────────────────────────────────
+const frame  = document.getElementById('sliderFrame');
+const loader = document.getElementById('ifrLoader');
+const t = setTimeout(() => loader.classList.add('gone'), 18000);
+frame.addEventListener('load', () => { clearTimeout(t); setTimeout(() => loader.classList.add('gone'), 500); });
+</script>
+</body>
+</html>
