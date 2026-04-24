@@ -1,3 +1,6 @@
+# Mia prima versione - per Unidata usa pdf_A4
+
+
 import re
 import requests
 from google import genai
