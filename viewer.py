@@ -99,8 +99,8 @@ if uploaded:
             except Exception as e:
                 st.error(f"Errore lettura {f.name}: {e}")
 else:
-    # Reset store se l'utente rimuove tutti i file
-    st.session_state["viewer_store"] = []
+    if not st.session_state.get("viewer_store"):
+        st.session_state["viewer_store"] = []
 
 store = st.session_state.get("viewer_store", [])
 
