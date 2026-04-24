@@ -17,24 +17,24 @@ PROMPT_TEMPLATE = """
 Sei un esperto di comunicazione e sintesi. Analizza il documento seguente e crea una sintesi strutturata in 5 punti chiave.
 
 === TIPI DI RIGA ===
-Titolo   → testo semplice, senza marcatori, ALL'INIZIO della sezione (reso grande e verde nel PDF)
-*testo*  → riga intera in grassetto (keyword, concetti chiave nel corpo)
-_testo_  → riga intera in corsivo (descrizioni brevi, dettagli)
-testo    → riga normale senza marcatori (elenchi, note)
+Titolo   → PRIMA RIGA della sezione, testo semplice SENZA NESSUN MARCATORE (grande, verde nel PDF)
+*testo*  → riga intera in grassetto — solo nel corpo, MAI come prima riga (verde nel PDF)
+_testo_  → riga intera in corsivo — descrizioni brevi (bianco nel PDF)
+testo    → riga normale senza marcatori — elenchi, note (bianco nel PDF)
 =        → separatore di sezione (solo = su una riga)
 
 === REGOLA FONDAMENTALE ===
 OGNI RIGA contiene UN SOLO tipo.
 VIETATO mescolare * e _ sulla stessa riga.
-Il Titolo è SEMPRE le prime righe della sezione, senza nessun marcatore.
+Il Titolo è SEMPRE la prima riga della sezione: NIENTE ASTERISCHI, NIENTE UNDERSCORE.
 
-SBAGLIATO:
-_e_ *Data center spaziali*
-*Titolo sezione*
-_Smart meter_ connesso
+SBAGLIATO (non fare MAI):
+*Calcolo Fotonico*          ← asterischi sul titolo: VIETATO
+_e_ *Data center spaziali*  ← marcatori misti: VIETATO
+*Smart* _meter_ connesso    ← marcatori misti: VIETATO
 
 CORRETTO:
-Titolo sezione
+Calcolo Fotonico
 _Smart meter connesso_
 
 === STRUTTURA OBBLIGATORIA ===

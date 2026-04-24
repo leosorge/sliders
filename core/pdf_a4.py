@@ -1,6 +1,6 @@
 """
 core/pdf_a4.py  —  Stile FT-CS Daily  (A4 portrait)
-Tipografia: 4 tipi — Titolo / Bold / Corsivo / Normale.
+Tipografia: Titolo 30pt verde / Bold 20pt verde / Corsivo 20pt bianco / Normale 20pt bianco.
 Compatibile Python 3.14 + reportlab >= 4.2
 """
 import base64
@@ -29,11 +29,11 @@ MARGIN    = 50
 GRID_STEP = 52
 
 # ── Tipografia ────────────────────────────────────────────────────────────────
-T_SIZE      = 30                          # Titolo: size
-T_LEAD      = 36                          # Titolo: leading
-B_SIZE      = 20                          # Body: size
-B_LEAD      = 20                          # Body: leading
-ITALIC_SKEW = math.tan(math.radians(12)) # corsivo simulato (~12°)
+T_SIZE      = 30
+T_LEAD      = 36
+B_SIZE      = 20
+B_LEAD      = 20
+ITALIC_SKEW = math.tan(math.radians(12))
 
 # ── Font ──────────────────────────────────────────────────────────────────────
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -136,6 +136,10 @@ def _wrap(text, font, size, max_w, c):
 def _parse_sections(summary):
     return [s.strip() for s in summary.split("=") if s.strip()]
 
+def _strip_markers(text):
+    """Rimuove * e _ stray da righe malformate di Gemini."""
+    return re.sub(r'[*_]', '', text).strip()
+
 def _parse_lines(section):
     result = []
     for raw in section.splitlines():
@@ -149,12 +153,12 @@ def _parse_lines(section):
         elif re.match(r"^(\d+[\.\)\]\s]|[-\u2022]\s)", line):
             result.append(("list", re.sub(r"^(\d+[\.\)\]\s]|[-\u2022]\s)", "", line).strip()))
         else:
-            result.append(("plain", line))
+            # Riga malformata (marcatori misti o stray): pulisci e tratta come plain
+            result.append(("plain", _strip_markers(line) or line))
     return result
 
 # ── Draw italic con slant ─────────────────────────────────────────────────────
 def _draw_italic(c, text, x, y):
-    """Disegna testo con slant simulato ~12 gradi (Kanit Regular inclinato)."""
     c.saveState()
     c.setFont(F_REG, B_SIZE)
     c.setFillColor(WHITE)
@@ -173,55 +177,62 @@ def _render_page(c, section, pub_title, date_str, footer_text, fig_num):
     items         = _parse_lines(section)
     max_w         = W - 2 * MARGIN
     y             = H - 70
-    in_title_zone = True  # True finché vediamo solo plain iniziali (= Titolo)
+    in_title_zone = True  # la prima riga non-blank è SEMPRE titolo
 
     for kind, text in items:
         if kind == "blank":
             y -= B_LEAD * 0.5
             continue
 
-        # ── Titolo: righe plain consecutive all'inizio della sezione ──────────
-        if kind == "plain" and in_title_zone:
+        # ── TITOLO ────────────────────────────────────────────────────────────
+        # La prima riga (e le successive plain consecutive) sono SEMPRE titolo,
+        # indipendentemente dal marcatore usato da Gemini.
+        if in_title_zone:
             c.setFillColor(GREEN)
             c.setFont(F_BOLD, T_SIZE)
             for line in _wrap(text.upper(), F_BOLD, T_SIZE, max_w, c):
                 c.drawString(MARGIN, y, line)
                 y -= T_LEAD
+            # Esci dalla zona titolo se Gemini ha usato un marcatore (bold/italic/list)
+            # oppure se il prossimo sarà body; rimani per righe plain consecutive.
+            if kind != "plain":
+                in_title_zone = False
+                y -= 8
             continue
 
-        # Prima riga non-title: uscita dalla zona titolo
-        if in_title_zone:
-            y -= 8
+        # ── CORPO ─────────────────────────────────────────────────────────────
+        # Uscita lazy dalla zona titolo quando arriva la prima riga non-plain
+        if kind != "plain" and kind != "blank":
             in_title_zone = False
 
-        # ── Bold: Kanit Bold 20pt WHITE ───────────────────────────────────────
-        if kind == "bold":
+        if kind == "plain":
+            # plain dopo il titolo = fine zona titolo
+            in_title_zone = False
             c.setFillColor(WHITE)
+            c.setFont(F_REG, B_SIZE)
+            for line in _wrap(text, F_REG, B_SIZE, max_w, c):
+                c.drawString(MARGIN, y, line)
+                y -= B_LEAD
+
+        elif kind == "bold":
+            # Bold: Kanit Bold 20pt VERDE
+            c.setFillColor(GREEN)
             c.setFont(F_BOLD, B_SIZE)
             for line in _wrap(text, F_BOLD, B_SIZE, max_w, c):
                 c.drawString(MARGIN, y, line)
                 y -= B_LEAD
 
-        # ── Corsivo: Kanit Regular con slant 12° WHITE ────────────────────────
         elif kind == "italic":
+            # Corsivo: Kanit Regular slant 12° BIANCO
             for line in _wrap(text, F_REG, B_SIZE, max_w, c):
                 _draw_italic(c, line, MARGIN, y)
                 y -= B_LEAD
 
-        # ── Lista: Kanit Regular 20pt WHITE ───────────────────────────────────
         elif kind == "list":
             c.setFillColor(WHITE)
             c.setFont(F_REG, B_SIZE)
             for i, line in enumerate(_wrap("\u2022 " + text, F_REG, B_SIZE, max_w - 16, c)):
                 c.drawString(MARGIN + (16 if i > 0 else 0), y, line)
-                y -= B_LEAD
-
-        # ── Normale: Kanit Regular 20pt WHITE ─────────────────────────────────
-        else:
-            c.setFillColor(WHITE)
-            c.setFont(F_REG, B_SIZE)
-            for line in _wrap(text, F_REG, B_SIZE, max_w, c):
-                c.drawString(MARGIN, y, line)
                 y -= B_LEAD
 
 def generate_pdf_a4(summary, pub_title, date_str, footer_text):
