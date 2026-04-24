@@ -1,91 +1,148 @@
 # Versione per Unidata - quella standard è my_pdf_a4
 
-
 """
-core/pdf_a4.py  —  Stile FT-CS Daily
-======================================
-Sfondo navy scuro, griglia teal sottile, titoli in verde,
-testo corpo in panna. Font: Kamit (fallback Helvetica).
-
-Posiziona questo file in  <progetto>/core/pdf_a4.py
-e inserisci i file .ttf di Kamit nella cartella  <progetto>/fonts/
+core/pdf_a4.py  —  Stile FT-CS Daily  (A4 portrait)
+Sfondo navy, griglia teal, titoli in verde, corpo panna.
+Font: Kanit (fallback Helvetica). Logo esagonale in basso a destra.
+Compatibile con Python 3.14 e reportlab >= 4.2
 """
-from __future__ import annotations
+import math
 import os
 import re
 from io import BytesIO
+from typing import List, Tuple
 
-from reportlab.lib.colors import Color, HexColor
+from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
-# ── Palette brand FT-CS Daily ────────────────────────────────────────────────
-NAVY      = HexColor("#131836")           # sfondo
-GREEN     = HexColor("#00C9A7")           # titolo + griglia
-CREAM     = HexColor("#EDE8D8")           # corpo
-GRID_COL  = Color(0, 0.788, 0.655, 0.18) # verde 18 % opacità
+# ── Palette ───────────────────────────────────────────────────────────────────
+NAVY  = HexColor("#131836")
+GREEN = HexColor("#00C9A7")
+CREAM = HexColor("#EDE8D8")
+GRID  = HexColor("#1C3F52")   # teal smorzato, niente alpha
 
-# ── Dimensioni A4 ────────────────────────────────────────────────────────────
-W, H       = A4          # 595.27 × 841.89 pt
-MARGIN     = 50
-GRID_STEP  = 52          # passo griglia in punti
+# ── Pagina ───────────────────────────────────────────────────────────────────
+W, H      = A4        # 595.27 × 841.89 pt
+MARGIN    = 50
+GRID_STEP = 52
 
-# ── Registrazione font Kamit ─────────────────────────────────────────────────
-_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts")
+# ── Font ─────────────────────────────────────────────────────────────────────
+_FONT_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "fonts"
+)
+_FONTS_REGISTERED = False
 
-def _reg(name: str, *candidates: str) -> bool:
-    for fname in candidates:
-        path = os.path.join(_FONT_DIR, fname)
-        if os.path.exists(path):
-            try:
-                pdfmetrics.registerFont(TTFont(name, path))
-                return True
-            except Exception:
-                pass
-    return False
+def _ensure_fonts():
+    global _FONTS_REGISTERED
+    if _FONTS_REGISTERED:
+        return
+    _FONTS_REGISTERED = True
 
-_ok_reg  = _reg("Kanit",       "Kanit-Regular.ttf", "Kanit.ttf",     "kanit-regular.ttf")
-_ok_bold = _reg("Kanit-Bold",  "Kanit-Bold.ttf",    "KanitBold.ttf", "kanit-bold.ttf")
+    def _reg(name, *files):
+        for f in files:
+            p = os.path.join(_FONT_DIR, f)
+            if os.path.isfile(p):
+                try:
+                    pdfmetrics.registerFont(TTFont(name, p))
+                    return True
+                except Exception:
+                    pass
+        return False
 
-F_REG   = "Kanit"      if _ok_reg  else "Helvetica"
-F_BOLD  = "Kanit-Bold" if _ok_bold else "Helvetica-Bold"
-F_ITAL  = "Kanit"      if _ok_reg  else "Helvetica-Oblique"
+    global F_REG, F_BOLD, F_ITAL
+    ok_r = _reg("Kanit",      "Kanit-Regular.ttf", "Kanit.ttf")
+    ok_b = _reg("Kanit-Bold", "Kanit-Bold.ttf",    "KanitBold.ttf")
+    F_REG  = "Kanit"      if ok_r else "Helvetica"
+    F_BOLD = "Kanit-Bold" if ok_b else "Helvetica-Bold"
+    F_ITAL = "Kanit"      if ok_r else "Helvetica-Oblique"
 
-# ── Primitivi grafici ────────────────────────────────────────────────────────
+F_REG  = "Helvetica"
+F_BOLD = "Helvetica-Bold"
+F_ITAL = "Helvetica-Oblique"
 
-def _background(c: canvas.Canvas, pw: float, ph: float) -> None:
-    c.setFillColor(NAVY)
-    c.rect(0, 0, pw, ph, stroke=0, fill=1)
+# ── Esagono helper ────────────────────────────────────────────────────────────
+def _hexagon_path(c, cx, cy, r):
+    """Disegna un esagono flat-top centrato in (cx, cy) con raggio r."""
+    pts = [
+        (cx + r * math.cos(math.radians(30 + 60 * i)),
+         cy + r * math.sin(math.radians(30 + 60 * i)))
+        for i in range(6)
+    ]
+    p = c.beginPath()
+    p.moveTo(pts[0][0], pts[0][1])
+    for x, y in pts[1:]:
+        p.lineTo(x, y)
+    p.close()
+    return p
 
 
-def _grid(c: canvas.Canvas, pw: float, ph: float) -> None:
+def _draw_hex_logo(c, cx, cy, hex_r=16, gap=2):
+    """
+    Cluster esagonale (stile logo FT-CS) centrato in (cx, cy).
+    Disegna solo il bordo verde, niente fill.
+    """
     c.saveState()
-    c.setStrokeColor(GRID_COL)
+    c.setStrokeColor(GREEN)
+    c.setFillColor(NAVY)
+    c.setLineWidth(1.8)
+
+    # Layout honeycomb: 1 centro + 6 intorno + 6 parziali fuori
+    row_h  = hex_r * math.sqrt(3)
+    col_w  = hex_r * 1.5 + gap
+
+    positions = [
+        (0, 0),
+        (col_w,  row_h / 2),
+        (col_w, -row_h / 2),
+        (0,      row_h),
+        (0,     -row_h),
+        (-col_w, row_h / 2),
+        (-col_w,-row_h / 2),
+        (col_w * 2, 0),
+        (-col_w * 2, 0),
+        (col_w,  row_h * 1.5),
+        (col_w, -row_h * 1.5),
+    ]
+    for dx, dy in positions:
+        p = _hexagon_path(c, cx + dx, cy + dy, hex_r - gap)
+        c.drawPath(p, stroke=1, fill=1)
+    c.restoreState()
+
+# ── Primitivi pagina ──────────────────────────────────────────────────────────
+
+def _background(c):
+    c.setFillColor(NAVY)
+    c.rect(0, 0, W, H, stroke=0, fill=1)
+
+
+def _grid(c):
+    c.saveState()
+    c.setStrokeColor(GRID)
     c.setLineWidth(0.4)
     x = 0.0
-    while x <= pw:
-        c.line(x, 0, x, ph)
+    while x <= W:
+        c.line(x, 0, x, H)
         x += GRID_STEP
     y = 0.0
-    while y <= ph:
-        c.line(0, y, pw, y)
+    while y <= H:
+        c.line(0, y, W, y)
         y += GRID_STEP
     c.restoreState()
 
 
-def _header(c: canvas.Canvas, pub_title: str, date_str: str,
-            fig_num: int, ph: float) -> None:
+def _header(c, pub_title, date_str, fig_num):
     c.saveState()
     c.setFont(F_ITAL, 9)
     c.setFillColor(GREEN)
-    c.drawString(MARGIN, ph - MARGIN + 14,
+    c.drawString(MARGIN, H - MARGIN + 14,
                  f"{pub_title}  -  {date_str}  FIG. {fig_num:02d}")
     c.restoreState()
 
 
-def _footer(c: canvas.Canvas, footer_text: str) -> None:
+def _footer(c, footer_text):
     c.saveState()
     c.setFont(F_REG, 8)
     c.setFillColor(CREAM)
@@ -93,14 +150,17 @@ def _footer(c: canvas.Canvas, footer_text: str) -> None:
     c.restoreState()
 
 
-def _wrap(text: str, font: str, size: float,
-          max_w: float, c: canvas.Canvas) -> list[str]:
-    """Word-wrap manuale: ritorna lista di righe."""
+def _logo(c):
+    """Logo esagonale in basso a destra."""
+    _draw_hex_logo(c, cx=W - 90, cy=75, hex_r=18, gap=2)
+
+# ── Word wrap ─────────────────────────────────────────────────────────────────
+
+def _wrap(text, font, size, max_w, c):
     words = text.split()
-    lines: list[str] = []
-    cur = ""
+    lines, cur = [], ""
     for w in words:
-        test = f"{cur} {w}".strip()
+        test = (cur + " " + w).strip()
         if c.stringWidth(test, font, size) <= max_w:
             cur = test
         else:
@@ -111,28 +171,19 @@ def _wrap(text: str, font: str, size: float,
         lines.append(cur)
     return lines or [""]
 
-# ── Parsing del testo strutturato ────────────────────────────────────────────
+# ── Parsing ───────────────────────────────────────────────────────────────────
 
-def _parse_sections(summary: str) -> list[str]:
+def _parse_sections(summary):
     return [s.strip() for s in summary.split("=") if s.strip()]
 
 
-def _parse_lines(section: str) -> list[tuple[str, str]]:
-    """
-    Ritorna lista di (tipo, testo):
-      'bold'   → *testo*
-      'italic' → _testo_
-      'list'   → 1. testo  /  - testo  /  • testo
-      'blank'  → riga vuota
-      'plain'  → tutto il resto
-    """
-    result: list[tuple[str, str]] = []
+def _parse_lines(section):
+    result = []
     for raw in section.splitlines():
         line = raw.strip()
         if not line:
             result.append(("blank", ""))
-            continue
-        if re.fullmatch(r"\*(.+)\*", line):
+        elif re.fullmatch(r"\*(.+)\*", line):
             result.append(("bold", line[1:-1]))
         elif re.fullmatch(r"_(.+)_", line):
             result.append(("italic", line[1:-1]))
@@ -142,159 +193,125 @@ def _parse_lines(section: str) -> list[tuple[str, str]]:
             result.append(("plain", line))
     return result
 
-# ── Rendering pagine ─────────────────────────────────────────────────────────
+# ── Rendering ─────────────────────────────────────────────────────────────────
 
-def _render_title_page(c: canvas.Canvas, section: str, pub_title: str,
-                       date_str: str, footer_text: str, fig_num: int,
-                       pw: float, ph: float) -> None:
-    _background(c, pw, ph)
-    _grid(c, pw, ph)
-    _header(c, pub_title, date_str, fig_num, ph)
+def _title_page(c, section, pub_title, date_str, footer_text, fig_num):
+    _background(c)
+    _grid(c)
+    _header(c, pub_title, date_str, fig_num)
     _footer(c, footer_text)
+    _logo(c)
 
-    items    = _parse_lines(section)
-    max_w    = pw - 2 * MARGIN
-    t_size   = 56          # dimensione titolo
-    b_size   = 26          # dimensione corpo
+    items      = _parse_lines(section)
+    max_w      = W - 2 * MARGIN
+    t_size     = 56
+    b_size     = 26
 
-    # Conta le righe bold per centrare verticalmente il blocco titolo
     bold_items  = [(k, t) for k, t in items if k == "bold"]
     other_items = [(k, t) for k, t in items if k != "bold"]
 
-    # Stima altezza titolo
-    est_title_h = len(bold_items) * t_size * 1.15 * 2  # stima generosa
-    y = ph * 0.55 + est_title_h / 2
+    # Centra verticalmente il blocco titolo
+    n_lines = sum(len(_wrap(t.upper(), F_BOLD, t_size, max_w, c))
+                  for _, t in bold_items)
+    y = H * 0.55 + (n_lines * t_size * 1.18) / 2
 
     for _, text in bold_items:
-        lines = _wrap(text.upper(), F_BOLD, t_size, max_w, c)
-        for line in lines:
+        for line in _wrap(text.upper(), F_BOLD, t_size, max_w, c):
             c.setFont(F_BOLD, t_size)
             c.setFillColor(GREEN)
             c.drawString(MARGIN, y, line)
             y -= t_size * 1.18
-        y -= 6
+        y -= 4
 
-    y -= 16  # gap tra titolo e corpo
+    y -= 18
     for kind, text in other_items:
         if kind == "blank":
             y -= b_size * 0.5
             continue
         font = F_ITAL if kind == "italic" else F_REG
-        lines = _wrap(text, font, b_size, max_w, c)
-        for line in lines:
+        for line in _wrap(text, font, b_size, max_w, c):
             c.setFont(font, b_size)
             c.setFillColor(CREAM)
             c.drawString(MARGIN, y, line)
             y -= b_size * 1.35
 
 
-def _render_content_page(c: canvas.Canvas, section: str, pub_title: str,
-                         date_str: str, footer_text: str, fig_num: int,
-                         pw: float, ph: float) -> None:
-    _background(c, pw, ph)
-    _grid(c, pw, ph)
-    _header(c, pub_title, date_str, fig_num, ph)
+def _content_page(c, section, pub_title, date_str, footer_text, fig_num):
+    _background(c)
+    _grid(c)
+    _header(c, pub_title, date_str, fig_num)
     _footer(c, footer_text)
+    _logo(c)
 
-    items    = _parse_lines(section)
-    max_w    = pw - 2 * MARGIN
-    h_size   = 36          # intestazione sezione
-    b_size   = 17          # corpo
-    l_size   = 15          # lista
-
-    y            = ph - MARGIN - 30
-    header_done  = False
+    items       = _parse_lines(section)
+    max_w       = W - 2 * MARGIN
+    h_size      = 36
+    b_size      = 17
+    l_size      = 15
+    y           = H - MARGIN - 30
+    header_done = False
 
     for kind, text in items:
         if kind == "blank":
             y -= b_size * 0.4
             continue
-
         if kind == "bold" and not header_done:
-            # Prima bold = intestazione sezione in verde
-            lines = _wrap(text.upper(), F_BOLD, h_size, max_w, c)
-            for line in lines:
+            for line in _wrap(text.upper(), F_BOLD, h_size, max_w, c):
                 c.setFont(F_BOLD, h_size)
                 c.setFillColor(GREEN)
                 c.drawString(MARGIN, y, line)
                 y -= h_size * 1.2
             header_done = True
             y -= 10
-
         elif kind == "bold":
-            # Bold successivi = keyword verde più piccolo
-            lines = _wrap(text, F_BOLD, b_size, max_w, c)
-            for line in lines:
+            for line in _wrap(text, F_BOLD, b_size, max_w, c):
                 c.setFont(F_BOLD, b_size)
                 c.setFillColor(GREEN)
                 c.drawString(MARGIN, y, line)
                 y -= b_size * 1.3
-
         elif kind == "italic":
-            lines = _wrap(text, F_ITAL, b_size, max_w, c)
-            for line in lines:
+            for line in _wrap(text, F_ITAL, b_size, max_w, c):
                 c.setFont(F_ITAL, b_size)
                 c.setFillColor(CREAM)
                 c.drawString(MARGIN, y, line)
                 y -= b_size * 1.3
-
         elif kind == "list":
-            bullet = "• " + text
-            lines = _wrap(bullet, F_REG, l_size, max_w - 12, c)
-            for i, line in enumerate(lines):
+            for i, line in enumerate(_wrap("• " + text, F_REG, l_size, max_w - 12, c)):
                 c.setFont(F_REG, l_size)
                 c.setFillColor(CREAM)
-                x_off = MARGIN + (14 if i > 0 else 0)
-                c.drawString(x_off, y, line)
+                c.drawString(MARGIN + (12 if i > 0 else 0), y, line)
                 y -= l_size * 1.4
             y -= 2
-
-        else:  # plain
-            lines = _wrap(text, F_REG, b_size, max_w, c)
-            for line in lines:
+        else:
+            for line in _wrap(text, F_REG, b_size, max_w, c):
                 c.setFont(F_REG, b_size)
                 c.setFillColor(CREAM)
                 c.drawString(MARGIN, y, line)
                 y -= b_size * 1.3
 
-# ── API pubblica ─────────────────────────────────────────────────────────────
+# ── API pubblica ──────────────────────────────────────────────────────────────
 
-def generate_pdf_a4(summary: str, pub_title: str,
-                    date_str: str, footer_text: str) -> bytes:
+def generate_pdf_a4(summary, pub_title, date_str, footer_text):
     """
-    Genera un PDF A4 (portrait) multi-pagina nello stile FT-CS Daily.
-
-    Parametri
-    ---------
-    summary      : testo strutturato con sezioni separate da "="
-    pub_title    : es. "FT-CS Daily"
-    date_str     : es. "24/04/26"
-    footer_text  : es. "Leo Sorge @ CEO Source 2026"
-
-    Ritorna
-    -------
-    bytes del PDF generato.
+    Genera PDF A4 portrait stile FT-CS Daily.
+    summary: testo con sezioni separate da "="
     """
+    _ensure_fonts()
     buf = BytesIO()
     cv  = canvas.Canvas(buf, pagesize=(W, H))
-
     sections = _parse_sections(summary)
     if not sections:
-        # PDF vuoto di sicurezza
-        _background(cv, W, H)
-        _grid(cv, W, H)
+        _background(cv)
+        _grid(cv)
+        _logo(cv)
         cv.showPage()
         cv.save()
         return buf.getvalue()
-
     for i, section in enumerate(sections):
         if i == 0:
-            _render_title_page(cv, section, pub_title, date_str,
-                               footer_text, i + 1, W, H)
+            _title_page(cv, section, pub_title, date_str, footer_text, i + 1)
         else:
-            _render_content_page(cv, section, pub_title, date_str,
-                                 footer_text, i + 1, W, H)
+            _content_page(cv, section, pub_title, date_str, footer_text, i + 1)
         cv.showPage()
-
     cv.save()
     return buf.getvalue()
