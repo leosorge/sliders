@@ -1,3 +1,5 @@
+# Mia versione - per Unidata usa pdf_square.py
+
 import re
 from io import BytesIO
 
