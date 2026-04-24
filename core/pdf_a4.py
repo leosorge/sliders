@@ -46,12 +46,12 @@ def _reg(name: str, *candidates: str) -> bool:
                 pass
     return False
 
-_ok_reg  = _reg("Kamit",       "Kamit.ttf",       "kamit.ttf",      "Kamit-Regular.ttf")
-_ok_bold = _reg("Kamit-Bold",  "Kamit-Bold.ttf",  "KamitBold.ttf",  "Kamit-Bold.otf")
+_ok_reg  = _reg("Kanit",       "Kanit-Regular.ttf", "Kanit.ttf",     "kanit-regular.ttf")
+_ok_bold = _reg("Kanit-Bold",  "Kanit-Bold.ttf",    "KanitBold.ttf", "kanit-bold.ttf")
 
-F_REG   = "Kamit"      if _ok_reg  else "Helvetica"
-F_BOLD  = "Kamit-Bold" if _ok_bold else "Helvetica-Bold"
-F_ITAL  = "Kamit"      if _ok_reg  else "Helvetica-Oblique"
+F_REG   = "Kanit"      if _ok_reg  else "Helvetica"
+F_BOLD  = "Kanit-Bold" if _ok_bold else "Helvetica-Bold"
+F_ITAL  = "Kanit"      if _ok_reg  else "Helvetica-Oblique"
 
 # ── Primitivi grafici ────────────────────────────────────────────────────────
 
