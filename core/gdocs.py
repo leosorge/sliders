@@ -16,56 +16,59 @@ from google.genai import types
 PROMPT_TEMPLATE = """
 Sei un esperto di comunicazione e sintesi. Analizza il documento seguente e crea una sintesi strutturata in 5 punti chiave.
 
-=== MARCATORI CONSENTITI ===
-*testo*  → riga intera in grassetto (titoli, keyword)
-_testo_  → riga intera in corsivo (descrizioni brevi)
+=== TIPI DI RIGA ===
+Titolo   → testo semplice, senza marcatori, ALL'INIZIO della sezione (reso grande e verde nel PDF)
+*testo*  → riga intera in grassetto (keyword, concetti chiave nel corpo)
+_testo_  → riga intera in corsivo (descrizioni brevi, dettagli)
 testo    → riga normale senza marcatori (elenchi, note)
 =        → separatore di sezione (solo = su una riga)
 
 === REGOLA FONDAMENTALE ===
-OGNI RIGA contiene UN SOLO tipo: solo *...*, solo _..._, o solo testo normale.
+OGNI RIGA contiene UN SOLO tipo.
 VIETATO mescolare * e _ sulla stessa riga.
+Il Titolo è SEMPRE le prime righe della sezione, senza nessun marcatore.
 
-SBAGLIATO (non fare MAI):
+SBAGLIATO:
 _e_ *Data center spaziali*
-*Smart* _meter_ connesso
+*Titolo sezione*
+_Smart meter_ connesso
 
 CORRETTO:
-*Data center spaziali*
+Titolo sezione
 _Smart meter connesso_
 
 === STRUTTURA OBBLIGATORIA ===
-*[Titolo prima parte]*
-*[Titolo seconda parte se serve]*
+[Titolo del documento — prima parte]
+[Titolo seconda parte se serve]
 =
-*Cinque punti chiave*
+Cinque punti chiave
 1. [punto 1]
 2. [punto 2]
 3. [punto 3]
 4. [punto 4]
 5. [punto 5]
 =
-*[Titolo Punto 1]*
+[Titolo Punto 1]
 _[descrizione riga 1]_
 _[descrizione riga 2]_
 *[keyword chiave]*
 =
-*[Titolo Punto 2]*
+[Titolo Punto 2]
 _[descrizione riga 1]_
 _[descrizione riga 2]_
 *[keyword chiave]*
 =
-*[Titolo Punto 3]*
-_[descrizione riga 1]_
-*[keyword chiave]*
-_[descrizione riga 2]_
-=
-*[Titolo Punto 4]*
+[Titolo Punto 3]
 _[descrizione riga 1]_
 _[descrizione riga 2]_
 *[keyword chiave]*
 =
-*[Titolo Punto 5]*
+[Titolo Punto 4]
+_[descrizione riga 1]_
+_[descrizione riga 2]_
+*[keyword chiave]*
+=
+[Titolo Punto 5]
 _[descrizione riga 1]_
 _[descrizione riga 2]_
 *[keyword chiave]*
