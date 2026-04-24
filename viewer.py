@@ -42,13 +42,48 @@ if not _viewer_ok:
     st.warning("**PyMuPDF non trovato.** Aggiungi `pymupdf` a `requirements.txt`.")
     st.stop()
 
-# ── Upload PDF ────────────────────────────────────────────────────────────────
-uploaded = st.file_uploader(
-    "📂 Carica PDF A4",
-    type=["pdf"],
-    accept_multiple_files=True,
-    label_visibility="visible",
-)
+# ── Upload PDF ────────────────────────────────────────────────────────────────# ── Upload PDF ────────────────────────────────────────────────────────────────
+_TEST_LINKS = [
+    "https://drive.google.com/file/d/16suMFynwqTSml2pWdNLa-gWfk5Bsl118/view?usp=drive_link",
+    "https://drive.google.com/file/d/1anbO6rA8GQ5kiHBKfI1Wy_dIpTr4aOMK/view?usp=drive_link",
+    "https://drive.google.com/file/d/1fJ8FzJHi-b8ZmJJTKsLWHK5Did4CvI2c/view?usp=drive_link",
+    "https://drive.google.com/file/d/1Cs_Kmkfa0VAEu0PdUFQ2hbQgFb_RMIbC/view?usp=drive_link",
+]
+
+col_up, col_test = st.columns([3, 1])
+with col_up:
+    uploaded = st.file_uploader(
+        "📂 Carica PDF A4",
+        type=["pdf"],
+        accept_multiple_files=True,
+        label_visibility="visible",
+    )
+with col_test:
+    st.write("")  # spacer
+    if st.button("🧪 Upload test", use_container_width=True):
+        import re as _re
+        import requests as _req
+        prog = st.progress(0, text="Caricamento PDF di test…")
+        added = 0
+        for i, url in enumerate(_TEST_LINKS):
+            try:
+                m = _re.search(r"/file/d/([a-zA-Z0-9_-]+)", url)
+                file_id = m.group(1)
+                dl_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                r = _req.get(dl_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20, allow_redirects=True)
+                r.raise_for_status()
+                raw = r.content
+                name = f"test_{i+1:02d}.pdf"
+                n = page_count(raw)
+                st.session_state.setdefault("viewer_store", []).append(
+                    {"name": name, "bytes": raw, "n_pages": n, "current_page": 1}
+                )
+                added += 1
+            except Exception as e:
+                st.warning(f"PDF {i+1}: {e}")
+            prog.progress((i + 1) / len(_TEST_LINKS))
+        if added:
+            st.rerun()
 
 # Popola store
 if uploaded:
