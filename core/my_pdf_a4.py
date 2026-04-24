@@ -1,3 +1,5 @@
+# Mia versione - per Unidata usa pdf_a4.py
+
 import re
 from io import BytesIO
 
