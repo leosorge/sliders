@@ -5,3 +5,4 @@ Pillow>=10.0
 requests>=2.31
 pymupdf>=1.23
 trafilatura>=1.12
+git+https://github.com/leosorge/llm-client.git
