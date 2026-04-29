@@ -4,7 +4,6 @@ from io import BytesIO
 from pathlib import Path
 
 import streamlit as st
-from llm_client import render_provider_selector
 
 from core.gdocs import process_url
 from core.pdf_a4 import generate_pdf_a4
@@ -28,7 +27,6 @@ except KeyError:
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    render_provider_selector()
     st.header("⚙️ Impostazioni")
     pub_title    = st.text_input("Titolo pubblicazione", value="FT-CS Daily")
     today_str    = st.text_input("Data", value=date.today().strftime("%d/%m/%y"))
